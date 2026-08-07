@@ -109,11 +109,11 @@ impl Overlay {
                 24, 0, 0, 0, // cheight, cwidth, cescapement, corientation
                 0, 0, 0, // bitalic, bunderline, cstrikeout
                 FW_BOLD.0, // cweight
-                DEFAULT_CHARSET.0,
-                OUT_DEFAULT_PRECIS.0,
-                CLIP_DEFAULT_PRECIS.0,
-                DEFAULT_QUALITY.0,
-                DEFAULT_PITCH.0,
+                DEFAULT_CHARSET.0 as u32,
+                OUT_DEFAULT_PRECIS.0 as u32,
+                CLIP_DEFAULT_PRECIS.0 as u32,
+                DEFAULT_QUALITY.0 as u32,
+                DEFAULT_PITCH.0 as u32,
                 w!("Microsoft YaHei"),
             );
             let _old_font = SelectObject(hdc_mem, font);
