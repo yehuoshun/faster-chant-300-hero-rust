@@ -210,7 +210,7 @@ mod tests {
     use std::env;
 
     fn test_dir() -> PathBuf {
-        env::temp_dir().join("fcd-test-schemes")
+        PathBuf::from("fcd-test-schemes")
     }
 
     fn setup() -> SchemeManager {
