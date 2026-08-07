@@ -25,11 +25,11 @@ impl Overlay {
             lpfnWndProc: Some(Self::wnd_proc),
             cbClsExtra: 0,
             cbWndExtra: 0,
-            hInstance: hinstance,
-            hIcon: unsafe { LoadIconW(None, IDI_APPLICATION).ok() },
-            hCursor: unsafe { LoadCursorW(None, IDC_ARROW).ok() },
-            hbrBackground: HBRUSH(0),
-            lpszMenuName: None,
+            hInstance: HINSTANCE(hinstance.0),
+            hIcon: unsafe { LoadIconW(None, IDI_APPLICATION).ok() }.unwrap_or_default(),
+            hCursor: unsafe { LoadCursorW(None, IDC_ARROW).ok() }.unwrap_or_default(),
+            hbrBackground: HBRUSH::default(),
+            lpszMenuName: PCWSTR::null(),
             lpszClassName: w!("FcdOverlayClass"),
         };
 
@@ -106,7 +106,7 @@ impl Overlay {
 
             // 字体
             let font = CreateFontW(
-                24, 0, 0, 0, FW_BOLD, 0, 0, 0,
+                24, 0, 0, 0, FW_BOLD.0, 0, 0, 0,
                 DEFAULT_CHARSET,
                 OUT_DEFAULT_PRECIS,
                 CLIP_DEFAULT_PRECIS,
@@ -116,7 +116,7 @@ impl Overlay {
             );
             let _old_font = SelectObject(hdc_mem, font);
 
-            let _ = SetBkMode(hdc_mem, 1);
+            let _ = SetBkMode(hdc_mem, BACKGROUND_MODE(1));
             let _ = SetTextColor(hdc_mem, COLORREF(0xFFFFFFFF));
 
             match content {
@@ -150,15 +150,24 @@ impl Overlay {
             // UpdateLayeredWindow
             let size = SIZE { cx: self.width, cy: self.height };
             let pt_src = POINT { x: 0, y: 0 };
-            let pt_dst = POINT { x: 0, y: 0 };
             let blend = BLENDFUNCTION {
-                BlendOp: AC_SRC_OVER,
+                BlendOp: AC_SRC_OVER as u8,
                 BlendFlags: 0,
                 SourceConstantAlpha: 200,
-                AlphaFormat: AC_SRC_ALPHA,
+                AlphaFormat: AC_SRC_ALPHA as u8,
             };
 
-            let _ = UpdateLayeredWindow(self.hwnd, hdc_window, &pt_dst, &size, hdc_mem, &pt_src, COLORREF(0), &blend, ULW_ALPHA);
+            let _ = UpdateLayeredWindow(
+                self.hwnd,
+                hdc_window,
+                Some(&pt_src),
+                &size,
+                hdc_mem,
+                Some(&pt_src),
+                COLORREF(0),
+                &blend,
+                ULW_ALPHA,
+            );
 
             // 清理
             let _ = SelectObject(hdc_mem, _old_font);
@@ -171,16 +180,16 @@ impl Overlay {
     }
 
     fn draw_text(&self, hdc: HDC, text: &str, x: i32, y: i32) {
-        let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+        let wide: Vec<u16> = text.encode_utf16().collect();
         unsafe {
             // 描边
             let _ = SetTextColor(hdc, COLORREF(0xFF000000));
             for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)] {
-                let _ = TextOutW(hdc, x + dx, y + dy, PCWSTR(wide.as_ptr()), text.len() as i32);
+                let _ = TextOutW(hdc, x + dx, y + dy, &wide);
             }
             // 填充
             let _ = SetTextColor(hdc, COLORREF(0xFFFFFFFF));
-            let _ = TextOutW(hdc, x, y, PCWSTR(wide.as_ptr()), text.len() as i32);
+            let _ = TextOutW(hdc, x, y, &wide);
         }
     }
 
