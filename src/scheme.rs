@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn test_persistence() {
-        let dir = test_dir();
+        let dir = PathBuf::from("fcd-test-persist");
         let _ = std::fs::remove_dir_all(&dir);
 
         {
@@ -307,7 +307,7 @@ mod tests {
             s.name = "持久化测试".into();
             s.primary[0] = "数据".into();
             mgr.set_active(0);
-        } // mgr 析构，数据已保存
+        }
 
         {
             let mgr = SchemeManager::init(dir.clone());
