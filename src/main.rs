@@ -8,8 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
-use windows::core::WParam;
-use windows::Win32::Foundation::LPARAM;
+use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     VK_BACK, VK_CAPITAL, VK_CONTROL, VK_ESCAPE, VK_LCONTROL, VK_LMENU, VK_LSHIFT,
@@ -24,32 +23,28 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
-/// VK 常量在 windows 0.58 中是 u16 类型
-fn vk_eq(vk: u32, target: u16) -> bool {
-    vk == target as u32
-}
-
 fn key_name(vk_code: u32) -> &'static str {
-    if vk_eq(vk_code, VK_ESCAPE) { return "Esc"; }
-    if vk_eq(vk_code, VK_RETURN) { return "Enter"; }
-    if vk_eq(vk_code, VK_SPACE) { return "Space"; }
-    if vk_eq(vk_code, VK_BACK) { return "Backspace"; }
-    if vk_eq(vk_code, VK_TAB) { return "Tab"; }
-    if vk_eq(vk_code, VK_CAPITAL) { return "CapsLock"; }
-    if vk_eq(vk_code, VK_CONTROL) || vk_eq(vk_code, VK_LCONTROL) || vk_eq(vk_code, VK_RCONTROL) { return "Ctrl"; }
-    if vk_eq(vk_code, VK_MENU) || vk_eq(vk_code, VK_LMENU) || vk_eq(vk_code, VK_RMENU) { return "Alt"; }
-    if vk_eq(vk_code, VK_SHIFT) || vk_eq(vk_code, VK_LSHIFT) || vk_eq(vk_code, VK_RSHIFT) { return "Shift"; }
-    if vk_eq(vk_code, VK_OEM_1) { return ";"; }
-    if vk_eq(vk_code, VK_OEM_2) { return "/"; }
-    if vk_eq(vk_code, VK_OEM_3) { return "~"; }
-    if vk_eq(vk_code, VK_OEM_4) { return "["; }
-    if vk_eq(vk_code, VK_OEM_5) { return "\\"; }
-    if vk_eq(vk_code, VK_OEM_6) { return "]"; }
-    if vk_eq(vk_code, VK_OEM_7) { return "'"; }
-    if vk_eq(vk_code, VK_OEM_PLUS) { return "="; }
-    if vk_eq(vk_code, VK_OEM_MINUS) { return "-"; }
-    if vk_eq(vk_code, VK_OEM_COMMA) { return ","; }
-    if vk_eq(vk_code, VK_OEM_PERIOD) { return "."; }
+    let vk = vk_code as u16;
+    if vk == VK_ESCAPE.0 { return "Esc"; }
+    if vk == VK_RETURN.0 { return "Enter"; }
+    if vk == VK_SPACE.0 { return "Space"; }
+    if vk == VK_BACK.0 { return "Backspace"; }
+    if vk == VK_TAB.0 { return "Tab"; }
+    if vk == VK_CAPITAL.0 { return "CapsLock"; }
+    if vk == VK_CONTROL.0 || vk == VK_LCONTROL.0 || vk == VK_RCONTROL.0 { return "Ctrl"; }
+    if vk == VK_MENU.0 || vk == VK_LMENU.0 || vk == VK_RMENU.0 { return "Alt"; }
+    if vk == VK_SHIFT.0 || vk == VK_LSHIFT.0 || vk == VK_RSHIFT.0 { return "Shift"; }
+    if vk == VK_OEM_1.0 { return ";"; }
+    if vk == VK_OEM_2.0 { return "/"; }
+    if vk == VK_OEM_3.0 { return "~"; }
+    if vk == VK_OEM_4.0 { return "["; }
+    if vk == VK_OEM_5.0 { return "\\"; }
+    if vk == VK_OEM_6.0 { return "]"; }
+    if vk == VK_OEM_7.0 { return "'"; }
+    if vk == VK_OEM_PLUS.0 { return "="; }
+    if vk == VK_OEM_MINUS.0 { return "-"; }
+    if vk == VK_OEM_COMMA.0 { return ","; }
+    if vk == VK_OEM_PERIOD.0 { return "."; }
     if (0x30..=0x39).contains(&vk_code) { return "数字键"; }
     if (0x41..=0x5A).contains(&vk_code) { return "字母键"; }
     if (0x60..=0x69).contains(&vk_code) { return "小键盘数字"; }
@@ -57,26 +52,26 @@ fn key_name(vk_code: u32) -> &'static str {
     "其他"
 }
 
-extern "system" fn keyboard_proc(n_code: i32, w_param: usize, l_param: isize) -> isize {
+extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> isize {
     if n_code >= 0 {
-        let kb = unsafe { &*(l_param as *const KBDLLHOOKSTRUCT) };
+        let kb = unsafe { &*(l_param.0 as *const KBDLLHOOKSTRUCT) };
         let vk = kb.vkCode;
 
-        if w_param as u32 == WM_KEYDOWN || w_param as u32 == WM_SYSKEYDOWN {
+        if w_param.0 == WM_KEYDOWN as usize || w_param.0 == WM_SYSKEYDOWN as usize {
             let name = key_name(vk);
             println!("[按下] vkCode={:3} (0x{:02X}) | {}", vk, vk, name);
 
-            if vk == VK_ESCAPE as u32 {
+            if vk as u16 == VK_ESCAPE.0 {
                 println!(">>> 检测到 Esc，退出中...");
                 RUNNING.store(false, Ordering::SeqCst);
             }
-        } else if w_param as u32 == WM_KEYUP || w_param as u32 == WM_SYSKEYUP {
+        } else if w_param.0 == WM_KEYUP as usize || w_param.0 == WM_SYSKEYUP as usize {
             let name = key_name(vk);
             println!("[释放] vkCode={:3} (0x{:02X}) | {}", vk, vk, name);
         }
     }
 
-    unsafe { CallNextHookEx(None, n_code, WParam(w_param), LPARAM(l_param)) }
+    unsafe { CallNextHookEx(None, n_code, w_param, l_param) }
 }
 
 fn main() -> io::Result<()> {
