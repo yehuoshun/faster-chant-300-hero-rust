@@ -1,7 +1,8 @@
-// 阶段 0：键盘钩子最小验证
-// 功能：安装全局键盘钩子，打印按键码，按 Esc 退出
+// 阶段 0：键盘钩子最小验证 + 自动更新
 // 编译：cargo build --release
 // 运行：需要管理员权限
+
+mod updater;
 
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -80,6 +81,9 @@ fn main() -> io::Result<()> {
     println!("  按任意键查看按键码，按 Esc 退出");
     println!("  注意：需要管理员权限运行");
     println!("============================================\n");
+
+    // 自动更新检查
+    updater::check_update();
 
     let hinst = unsafe { GetModuleHandleW(None).unwrap_or_default() };
 
