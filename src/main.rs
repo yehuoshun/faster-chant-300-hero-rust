@@ -18,7 +18,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, SetWindowsHookExW, UnhookWindowsHookEx, KBDLLHOOKSTRUCT,
-    WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, LRESULT,
 };
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
@@ -52,7 +52,7 @@ fn key_name(vk_code: u32) -> &'static str {
     "其他"
 }
 
-extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> isize {
+extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
     if n_code >= 0 {
         let kb = unsafe { &*(l_param.0 as *const KBDLLHOOKSTRUCT) };
         let vk = kb.vkCode;
