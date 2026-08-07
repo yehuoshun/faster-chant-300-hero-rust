@@ -25,6 +25,8 @@ pub struct Config {
     pub burst_interval: u8,
     /// 当前激活方案编号
     pub active_scheme: u8,
+    /// 是否启用二级面板
+    pub use_secondary: bool,
 }
 
 impl Default for Config {
@@ -39,6 +41,7 @@ impl Default for Config {
             chat_mode: false,
             burst_interval: 0,
             active_scheme: 0,
+            use_secondary: true,
         }
     }
 }
