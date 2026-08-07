@@ -1,8 +1,10 @@
 // 自动更新模块
 // 启动时检查 GitHub Releases，有新版本自动下载替换
 
+use crate::logger;
 use serde::Deserialize;
 use std::io::Read;
+use std::os::windows::process::CommandExt;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
