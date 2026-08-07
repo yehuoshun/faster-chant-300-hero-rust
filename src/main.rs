@@ -4,6 +4,8 @@
 
 mod logger;
 mod updater;
+mod scheme;
+mod search;
 
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
