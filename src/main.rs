@@ -1,7 +1,8 @@
-// 阶段 0：键盘钩子最小验证 + 自动更新
+// 阶段 0：键盘钩子最小验证 + 自动更新 + 日志
 // 编译：cargo build --release
 // 运行：需要管理员权限
 
+mod logger;
 mod updater;
 
 use std::io;
@@ -60,15 +61,12 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) 
 
         if w_param.0 == WM_KEYDOWN as usize || w_param.0 == WM_SYSKEYDOWN as usize {
             let name = key_name(vk);
-            println!("[按下] vkCode={:3} (0x{:02X}) | {}", vk, vk, name);
+            logger::debug(&format!("按下 vkCode={} (0x{:02X}) {}", vk, vk, name));
 
             if vk as u16 == VK_ESCAPE.0 {
-                println!(">>> 检测到 Esc，退出中...");
+                logger::info("检测到 Esc，准备退出");
                 RUNNING.store(false, Ordering::SeqCst);
             }
-        } else if w_param.0 == WM_KEYUP as usize || w_param.0 == WM_SYSKEYUP as usize {
-            let name = key_name(vk);
-            println!("[释放] vkCode={:3} (0x{:02X}) | {}", vk, vk, name);
         }
     }
 
@@ -76,11 +74,8 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) 
 }
 
 fn main() -> io::Result<()> {
-    println!("============================================");
-    println!("  300高速咏唱装置 - 阶段0：键盘钩子验证");
-    println!("  按任意键查看按键码，按 Esc 退出");
-    println!("  注意：需要管理员权限运行");
-    println!("============================================\n");
+    logger::info(&format!("程序启动 v{}", env!("CARGO_PKG_VERSION")));
+    logger::info(&format!("exe路径: {:?}", std::env::current_exe().unwrap_or_default()));
 
     // 自动更新检查
     updater::check_update();
@@ -93,18 +88,18 @@ fn main() -> io::Result<()> {
 
     match hook {
         Ok(h) => {
-            println!("[成功] 键盘钩子已安装，开始监听按键...\n");
+            logger::info("键盘钩子安装成功，开始监听");
 
             while RUNNING.load(Ordering::SeqCst) {
                 thread::sleep(Duration::from_millis(50));
             }
 
             unsafe { UnhookWindowsHookEx(h); }
-            println!("\n[成功] 键盘钩子已卸载，程序退出。");
+            logger::info("键盘钩子已卸载，程序正常退出");
         }
         Err(e) => {
-            eprintln!("[错误] 安装键盘钩子失败：{:?}", e);
-            eprintln!("请以管理员权限运行此程序。");
+            logger::error(&format!("安装键盘钩子失败: {:?}", e));
+            logger::error("请以管理员权限运行此程序");
             eprintln!("按回车退出...");
             let mut s = String::new();
             io::stdin().read_line(&mut s)?;
