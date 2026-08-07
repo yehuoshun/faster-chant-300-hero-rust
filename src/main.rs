@@ -12,13 +12,14 @@ use std::time::Duration;
 use windows::Win32::Foundation::HINSTANCE;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
+    VK_BACK, VK_CAPITAL, VK_CONTROL, VK_ESCAPE, VK_LCONTROL, VK_LMENU, VK_LSHIFT,
+    VK_MENU, VK_OEM_1, VK_OEM_2, VK_OEM_3, VK_OEM_4, VK_OEM_5, VK_OEM_6, VK_OEM_7,
+    VK_OEM_COMMA, VK_OEM_MINUS, VK_OEM_PERIOD, VK_OEM_PLUS, VK_RCONTROL, VK_RETURN,
+    VK_RMENU, VK_RSHIFT, VK_SHIFT, VK_SPACE, VK_TAB,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, SetWindowsHookExW, UnhookWindowsHookEx, KBDLLHOOKSTRUCT, HHOOK,
     WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
-    VK_ESCAPE, VK_RETURN, VK_SPACE, VK_BACK, VK_SHIFT, VK_CONTROL, VK_MENU,
-    VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU,
-    VK_OEM_1, VK_OEM_2, VK_OEM_3, VK_OEM_4, VK_OEM_5, VK_OEM_6, VK_OEM_7,
-    VK_OEM_PLUS, VK_OEM_MINUS, VK_OEM_COMMA, VK_OEM_PERIOD,
-    VK_CAPITAL, VK_TAB,
 };
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
@@ -60,7 +61,7 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: usize, l_param: isize) ->
         let vk = kb.vkCode;
 
         match w_param as u32 {
-            WM_KEYDOWN | WM_SYSKEYDOWN => {
+            v if v == WM_KEYDOWN.0 || v == WM_SYSKEYDOWN.0 => {
                 let name = key_name(vk);
                 println!(
                     "[按下] vkCode={:3} (0x{:02X}) | {}",
@@ -72,8 +73,7 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: usize, l_param: isize) ->
                     RUNNING.store(false, Ordering::SeqCst);
                 }
             }
-            WM_KEYUP | WM_SYSKEYUP => {
-                // 只打印，不处理
+            v if v == WM_KEYUP.0 || v == WM_SYSKEYUP.0 => {
                 let name = key_name(vk);
                 println!(
                     "[释放] vkCode={:3} (0x{:02X}) | {}",
