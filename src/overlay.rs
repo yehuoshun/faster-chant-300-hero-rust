@@ -1,6 +1,7 @@
 // 悬浮窗模块
-// 透明分层窗口 + GDI 文字描边渲染
+// 透明分层窗口 + GDI 文字渲染
 
+use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
@@ -32,9 +33,7 @@ impl Overlay {
             lpszClassName: w!("FcdOverlayClass"),
         };
 
-        if unsafe { RegisterClassW(&wc) } == 0 {
-            // 可能已注册
-        }
+        unsafe { let _ = RegisterClassW(&wc); }
 
         // 创建分层窗口
         let hwnd = unsafe {
@@ -48,23 +47,15 @@ impl Overlay {
                 None,
                 hinstance,
                 None,
-            )
+            ).ok()?
         };
-
-        if hwnd.is_invalid() {
-            return None;
-        }
 
         // 设置窗口透明度
         unsafe {
             let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 0, LWA_COLORKEY);
         }
 
-        Some(Self {
-            hwnd,
-            width: 400,
-            height: 300,
-        })
+        Some(Self { hwnd, width: 400, height: 300 })
     }
 
     /// 显示窗口
@@ -77,9 +68,7 @@ impl Overlay {
 
     /// 隐藏窗口
     pub fn hide(&self) {
-        unsafe {
-            let _ = ShowWindow(self.hwnd, SW_HIDE);
-        }
+        unsafe { let _ = ShowWindow(self.hwnd, SW_HIDE); }
     }
 
     /// 设置位置
@@ -100,32 +89,22 @@ impl Overlay {
         self.render(content);
     }
 
-    /// 渲染内容
+    /// 渲染
     fn render(&self, content: &OverlayContent) {
-        let width = self.width;
-        let height = self.height;
-
         unsafe {
-            // 获取窗口 DC
             let hdc_window = GetDC(self.hwnd);
-            if hdc_window.is_invalid() {
-                return;
-            }
+            if hdc_window.is_invalid() { return; }
 
-            // 创建兼容 DC 和位图
             let hdc_mem = CreateCompatibleDC(hdc_window);
-            let hbitmap = CreateCompatibleBitmap(hdc_window, width, height);
+            let hbitmap = CreateCompatibleBitmap(hdc_window, self.width, self.height);
             let _old_bmp = SelectObject(hdc_mem, hbitmap);
 
-            // 创建画刷填充背景（半透明）
-            let brush = CreateSolidBrush(COLORREF(0x80000000)); // ARGB: 黑色半透明
-            let _ = FillRect(hdc_mem, &RECT {
-                left: 0, top: 0,
-                right: width, bottom: height,
-            }, brush);
+            // 背景
+            let brush = CreateSolidBrush(COLORREF(0x80000000));
+            let _ = FillRect(hdc_mem, &RECT { left: 0, top: 0, right: self.width, bottom: self.height }, brush);
             let _ = DeleteObject(brush);
 
-            // 创建字体
+            // 字体
             let font = CreateFontW(
                 24, 0, 0, 0, FW_BOLD, 0, 0, 0,
                 DEFAULT_CHARSET,
@@ -137,15 +116,12 @@ impl Overlay {
             );
             let _old_font = SelectObject(hdc_mem, font);
 
-            // 设置文字颜色
-            let _ = SetBkMode(hdc_mem, 1); // TRANSPARENT
-            let _ = SetTextColor(hdc_mem, COLORREF(0xFFFFFFFF)); // 白色
+            let _ = SetBkMode(hdc_mem, 1);
+            let _ = SetTextColor(hdc_mem, COLORREF(0xFFFFFFFF));
 
-            // 渲染内容
             match content {
-                OverlayContent::Home { items, active } => {
-                    for (i, item) in items.iter().enumerate() {
-                        if i >= 9 { break; }
+                OverlayContent::Home { items, active: _ } => {
+                    for (i, item) in items.iter().enumerate().take(9) {
                         let text = format!("{}. {}", i + 1, item);
                         let y = 10 + i as i32 * 30;
                         self.draw_text(hdc_mem, &text, 10, y);
@@ -154,8 +130,7 @@ impl Overlay {
                 OverlayContent::Secondary { index, items } => {
                     let title = format!("二级面板 {}", index);
                     self.draw_text(hdc_mem, &title, 10, 10);
-                    for (i, item) in items.iter().enumerate() {
-                        if i >= 10 { break; }
+                    for (i, item) in items.iter().enumerate().take(10) {
                         let text = format!("{}. {}", i, item);
                         let y = 40 + i as i32 * 25;
                         self.draw_text(hdc_mem, &text, 10, y);
@@ -164,8 +139,7 @@ impl Overlay {
                 OverlayContent::Search { query, results } => {
                     let title = format!("搜索: {}", query);
                     self.draw_text(hdc_mem, &title, 10, 10);
-                    for (i, (id, name)) in results.iter().enumerate() {
-                        if i >= 9 { break; }
+                    for (i, (id, name)) in results.iter().enumerate().take(9) {
                         let text = format!("{}. {} [{}]", i + 1, name, id);
                         let y = 40 + i as i32 * 25;
                         self.draw_text(hdc_mem, &text, 10, y);
@@ -173,10 +147,10 @@ impl Overlay {
                 }
             }
 
-            // 使用 UpdateLayeredWindow 更新窗口
-            let size = SIZE { cx: width, cy: height };
+            // UpdateLayeredWindow
+            let size = SIZE { cx: self.width, cy: self.height };
             let pt_src = POINT { x: 0, y: 0 };
-            let pt_dst = POINT { x: 0, y: 0 }; // 需要用 GetWindowRect 获取实际位置
+            let pt_dst = POINT { x: 0, y: 0 };
             let blend = BLENDFUNCTION {
                 BlendOp: AC_SRC_OVER,
                 BlendFlags: 0,
@@ -184,17 +158,7 @@ impl Overlay {
                 AlphaFormat: AC_SRC_ALPHA,
             };
 
-            let _ = UpdateLayeredWindow(
-                self.hwnd,
-                hdc_window,
-                &pt_dst,
-                &size,
-                hdc_mem,
-                &pt_src,
-                COLORREF(0),
-                &blend,
-                ULW_ALPHA,
-            );
+            let _ = UpdateLayeredWindow(self.hwnd, hdc_window, &pt_dst, &size, hdc_mem, &pt_src, COLORREF(0), &blend, ULW_ALPHA);
 
             // 清理
             let _ = SelectObject(hdc_mem, _old_font);
@@ -206,67 +170,40 @@ impl Overlay {
         }
     }
 
-    /// 绘制带描边的文字
     fn draw_text(&self, hdc: HDC, text: &str, x: i32, y: i32) {
         let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
-
         unsafe {
-            // 描边（黑色）
+            // 描边
             let _ = SetTextColor(hdc, COLORREF(0xFF000000));
-            let offsets = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)];
-            for (dx, dy) in offsets {
+            for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)] {
                 let _ = TextOutW(hdc, x + dx, y + dy, PCWSTR(wide.as_ptr()), text.len() as i32);
             }
-
-            // 填充（白色）
+            // 填充
             let _ = SetTextColor(hdc, COLORREF(0xFFFFFFFF));
             let _ = TextOutW(hdc, x, y, PCWSTR(wide.as_ptr()), text.len() as i32);
         }
     }
 
-    /// 窗口过程
     extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         match msg {
-            WM_DESTROY => {
-                unsafe { PostQuitMessage(0) };
-                LRESULT(0)
-            }
+            WM_DESTROY => { unsafe { let _ = PostQuitMessage(0); } LRESULT(0) }
             _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
         }
     }
 }
 
-/// 悬浮窗内容
 pub enum OverlayContent {
-    /// 首页
-    Home {
-        items: Vec<String>,
-        active: u8,
-    },
-    /// 二级面板
-    Secondary {
-        index: u8,
-        items: [String; 10],
-    },
-    /// 搜索页
-    Search {
-        query: String,
-        results: Vec<(u8, String)>,
-    },
+    Home { items: Vec<String>, active: u8 },
+    Secondary { index: u8, items: [String; 10] },
+    Search { query: String, results: Vec<(u8, String)> },
 }
 
 #[cfg(test)]
 mod tests {
-    // 在 CI 环境下无法测试窗口创建
-    // 这些测试需要在有桌面环境的 Windows 上运行
-
     #[test]
-    fn test_overlay_content_creation() {
+    fn test_content_creation() {
         use super::OverlayContent;
-        let content = OverlayContent::Home {
-            items: vec!["测试".into()],
-            active: 0,
-        };
-        assert!(matches!(content, OverlayContent::Home { .. }));
+        let c = OverlayContent::Home { items: vec!["test".into()], active: 0 };
+        assert!(matches!(c, OverlayContent::Home { .. }));
     }
 }
