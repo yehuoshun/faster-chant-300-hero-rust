@@ -10,6 +10,7 @@ mod config;
 mod state;
 pub mod input;
 mod burst;
+mod overlay;
 
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
