@@ -25,7 +25,7 @@ impl Logger {
             .open(&log_path)
             .ok();
 
-        if let Some(ref f) = file {
+        if let Some(ref _f) = file {
             let _ = writeln!(&std::io::stderr(), "[日志] 日志文件: {}", log_path.display());
         }
 
@@ -47,7 +47,9 @@ impl Logger {
                     .append(true)
                     .open(&log_path)
                     .ok();
-                let _ = writeln!(self.file, "[日志] 日志文件已轮转，旧日志保存为 .log.bak");
+                if let Some(ref mut f) = self.file {
+                    let _ = writeln!(f, "[日志] 日志文件已轮转，旧日志保存为 .log.bak");
+                }
             }
         }
     }
