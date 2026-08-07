@@ -16,6 +16,9 @@ jobs:
       - name: 安装 Rust 工具链
         run: rustup default stable
 
+      - name: 运行测试
+        run: cargo test --release
+
       - name: 编译 Release
         run: cargo build --release
 
