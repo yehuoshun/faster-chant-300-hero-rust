@@ -4,27 +4,21 @@
 
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-    KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, VIRTUAL_KEY, VK_LCONTROL, VK_RCONTROL,
-    VK_RETURN, VK_RSHIFT, VK_V,
+    KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_LCONTROL, VK_RETURN, VK_RSHIFT, VK_V,
 };
 
 /// 发送消息（模拟键盘输入）
-/// public_chat: 是否全体频道（按 Shift）
-/// chat_mode: 聊天模式（不模拟回车）
 pub fn send_message(text: &str, public_chat: bool, chat_mode: bool) {
-    crate::logger::info(&format!("发送消息: {}...", &text[..text.len().min(20)]));
+    crate::logger::info(&format!("发送: {}...", &text[..text.len().min(20)]));
 
-    // 先复制到剪贴板
     if let Err(e) = set_clipboard(text) {
-        crate::logger::error(&format!("剪贴板写入失败: {}", e));
+        crate::logger::error(&format!("剪贴板失败: {}", e));
         return;
     }
 
-    // 短暂延迟，确保剪贴板准备好
     std::thread::sleep(std::time::Duration::from_millis(30));
 
     if !chat_mode {
-        // 游戏模式：回车 → 粘贴 → 回车
         if public_chat {
             key_down(VK_RSHIFT);
         }
@@ -35,7 +29,7 @@ pub fn send_message(text: &str, public_chat: bool, chat_mode: bool) {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
 
-    // Ctrl+V 粘贴
+    // Ctrl+V
     key_down(VK_LCONTROL);
     key_press(VK_V);
     key_up(VK_LCONTROL);
@@ -43,14 +37,12 @@ pub fn send_message(text: &str, public_chat: bool, chat_mode: bool) {
     std::thread::sleep(std::time::Duration::from_millis(20));
 
     if !chat_mode {
-        // 回车发送
         key_press(VK_RETURN);
     }
 
-    crate::logger::debug(&format!("消息发送完成: {} chars", text.len()));
+    crate::logger::debug("消息已发送");
 }
 
-/// 模拟按键按下和释放
 fn key_press(vk: VIRTUAL_KEY) {
     key_down(vk);
     key_up(vk);
@@ -88,43 +80,43 @@ fn key_up(vk: VIRTUAL_KEY) {
     unsafe { SendInput(&[input], std::mem::size_of::<INPUT>() as i32) };
 }
 
-/// 设置剪贴板文本
+/// 设置剪贴板文本（Win32 API）
 fn set_clipboard(text: &str) -> Result<(), String> {
-    use windows::Win32::System::Memory::{GlobalAlloc, GlobalFree, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
-    use windows::Win32::System::DataExchange::{OpenClipboard, EmptyClipboard, SetClipboardData, CloseClipboard};
-    use windows::Win32::System::Ole::{CF_UNICODETEXT};
-    use windows::Win32::Foundation::{GetLastError, HWND};
     use std::ptr;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::System::DataExchange::{
+        CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+    };
+    use windows::Win32::System::Memory::{
+        GlobalAlloc, GlobalLock, GlobalUnlock, GlobalFree, GMEM_MOVEABLE,
+    };
+    use windows::Win32::System::Ole::CF_UNICODETEXT;
 
-    // 编码为 UTF-16LE（Windows 宽字符）
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     let byte_size = wide.len() * 2;
 
     unsafe {
-        if OpenClipboard(HWND::default()).is_err() {
-            return Err("OpenClipboard failed".into());
-        }
-
+        OpenClipboard(HWND::default()).map_err(|e| format!("OpenClipboard: {:?}", e))?;
         let _ = EmptyClipboard();
 
-        let handle = GlobalAlloc(GMEM_MOVEABLE, byte_size)?;
+        let handle = GlobalAlloc(GMEM_MOVEABLE, byte_size)
+            .map_err(|e| format!("GlobalAlloc: {:?}", e))?;
+
         let ptr = GlobalLock(handle);
         if ptr.is_null() {
-            GlobalFree(handle);
-            CloseClipboard();
+            let _ = GlobalFree(handle);
+            let _ = CloseClipboard();
             return Err("GlobalLock failed".into());
         }
 
         ptr::copy_nonoverlapping(wide.as_ptr() as *const u8, ptr as *mut u8, byte_size);
-        GlobalUnlock(handle);
 
-        if SetClipboardData(CF_UNICODETEXT.0 as u32, handle).is_err() {
-            GlobalFree(handle);
-            CloseClipboard();
-            return Err("SetClipboardData failed".into());
-        }
+        let _ = GlobalUnlock(handle);
 
-        CloseClipboard();
+        SetClipboardData(CF_UNICODETEXT.0 as u32, handle)
+            .map_err(|e| format!("SetClipboardData: {:?}", e))?;
+
+        CloseClipboard().map_err(|e| format!("CloseClipboard: {:?}", e))?;
     }
 
     Ok(())
@@ -135,14 +127,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_set_clipboard() {
-        // 这个测试在 CI 无桌面环境下可能失败，标记为忽略
-        // 在本地 Windows 桌面环境可以手动测试
-    }
-
-    #[test]
-    fn test_key_constants() {
-        // 验证 VK 常量值
+    fn test_vk_values() {
         assert_eq!(VK_RETURN.0, 0x0D);
         assert_eq!(VK_V.0, 0x56);
         assert_eq!(VK_LCONTROL.0, 0xA2);
