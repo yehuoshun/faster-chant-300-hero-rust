@@ -126,9 +126,9 @@ impl SchemeManager {
     /// 新增方案
     pub fn append(&mut self, id: u8) -> &mut Scheme {
         crate::logger::info(&format!("新增方案: {}", id));
-        let scheme = self.data.schemes.entry(id).or_default();
+        self.data.schemes.entry(id).or_default();
         self.save();
-        scheme
+        self.data.schemes.get_mut(&id).unwrap()
     }
 
     /// 更新方案（覆盖）
