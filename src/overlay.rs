@@ -107,11 +107,11 @@ impl Overlay {
             // 字体
             let font = CreateFontW(
                 24, 0, 0, 0, FW_BOLD.0, 0, 0, 0,
-                DEFAULT_CHARSET,
-                OUT_DEFAULT_PRECIS,
-                CLIP_DEFAULT_PRECIS,
-                DEFAULT_QUALITY,
-                DEFAULT_PITCH,
+                DEFAULT_CHARSET.0,
+                OUT_DEFAULT_PRECIS.0,
+                CLIP_DEFAULT_PRECIS.0,
+                DEFAULT_QUALITY.0,
+                DEFAULT_PITCH.0,
                 w!("Microsoft YaHei"),
             );
             let _old_font = SelectObject(hdc_mem, font);
@@ -161,11 +161,11 @@ impl Overlay {
                 self.hwnd,
                 hdc_window,
                 Some(&pt_src),
-                &size,
+                Some(&size),
                 hdc_mem,
                 Some(&pt_src),
                 COLORREF(0),
-                &blend,
+                Some(&blend),
                 ULW_ALPHA,
             );
 
