@@ -156,8 +156,8 @@ impl StateMachine {
             Page::Secondary(_) => {
                 if let Some(n) = num {
                     if let Some(scheme) = schemes.get(self.scheme_id) {
-                        let idx = self.page_secondary_index();
-                        let msg = scheme.secondary[idx as usize][n as usize].clone();
+                        let idx = self.page_secondary_index() as usize - 1;
+                        let msg = scheme.secondary[idx][n as usize].clone();
                         if !msg.is_empty() {
                             if self.auto_back {
                                 self.page = Page::Home;
