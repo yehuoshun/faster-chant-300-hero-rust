@@ -106,7 +106,9 @@ impl Overlay {
 
             // 字体
             let font = CreateFontW(
-                24, 0, 0, 0, FW_BOLD.0, 0, 0, 0,
+                24, 0, 0, 0, // cheight, cwidth, cescapement, corientation
+                0, 0, 0, // bitalic, bunderline, cstrikeout
+                FW_BOLD.0, // cweight
                 DEFAULT_CHARSET.0,
                 OUT_DEFAULT_PRECIS.0,
                 CLIP_DEFAULT_PRECIS.0,
