@@ -23,12 +23,13 @@ use windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    VK_ESCAPE, VK_SPACE, KBDLLHOOKSTRUCT,
+    VK_ESCAPE, VK_SPACE,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, SetWindowsHookExW, UnhookWindowsHookEx,
     WH_KEYBOARD_LL, WM_KEYDOWN, WM_SYSKEYDOWN, WM_KEYUP, WM_SYSKEYUP,
     GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
+    KBDLLHOOKSTRUCT,
 };
 
 use state::{StateMachine, Page, ActionResult};
@@ -63,7 +64,7 @@ fn init() -> Option<GlobalState> {
     let dir = data_dir();
     let _ = std::fs::create_dir_all(&dir);
 
-    let config = Config::load(&dir).unwrap_or_default();
+    let config = Config::load(&dir);
     let mut scheme_mgr = SchemeManager::init(dir.clone());
     // config.active_scheme 优先作为激活方案（若对应方案存在）
     if scheme_mgr.contains(config.active_scheme) {

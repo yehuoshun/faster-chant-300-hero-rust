@@ -14,6 +14,11 @@ pub struct Overlay {
     height: i32,
 }
 
+// HWND 是 Windows 句柄（裸指针包装），跨线程传递句柄本身是安全的。
+// 否则 static STATE 中的 GlobalState 无法满足 Sync（Mutex 要求 T: Send）。
+unsafe impl Send for Overlay {}
+unsafe impl Sync for Overlay {}
+
 impl Overlay {
     /// 创建悬浮窗
     pub fn new() -> Option<Self> {
