@@ -17,7 +17,7 @@ jobs:
         run: rustup default stable
 
       - name: 运行测试
-        run: cargo test --release
+        run: cargo test --release -- --test-threads=1
 
       - name: 编译 Release
         run: cargo build --release
