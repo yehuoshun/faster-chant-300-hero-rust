@@ -1,10 +1,10 @@
 // 日志系统
 // 目标：只看日志就能定位 90% 的问题
-// 日志文件默认与 exe 同级，文件名 faster-chant.log
+// 日志文件位于 exe 同目录下的 log/ 文件夹，文件名 faster-chant.log
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -19,6 +19,10 @@ struct Logger {
 impl Logger {
     fn new() -> Self {
         let log_path = log_path();
+        // 确保 log/ 目录存在，否则打开文件会失败
+        if let Some(dir) = log_path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
         let file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -121,9 +125,13 @@ fn is_leap(y: u64) -> bool {
 }
 
 fn log_path() -> PathBuf {
-    let mut path = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
-    path.set_file_name("faster-chant.log");
-    path
+    // exe 同目录下的 log/ 文件夹
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
+    let dir = exe
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("log");
+    dir.join("faster-chant.log")
 }
 
 // === 公开 API ===
