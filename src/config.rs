@@ -27,6 +27,26 @@ pub struct Config {
     pub active_scheme: u8,
     /// 是否启用二级面板
     pub use_secondary: bool,
+
+    // ── 面板样式 ──
+    /// 面板宽度（像素）
+    pub panel_width: u16,
+    /// 背景颜色 RGB
+    pub bg_color: [u8; 3],
+    /// 背景透明度 0-255
+    pub bg_alpha: u8,
+    /// 字体族
+    pub font_family: String,
+    /// 字号（像素）
+    pub font_size: u16,
+    /// 字体加粗
+    pub font_bold: bool,
+    /// 文字颜色 RGB
+    pub text_color: [u8; 3],
+    /// 描边颜色 RGB
+    pub outline_color: [u8; 3],
+    /// 描边大小（像素）
+    pub outline_size: u8,
 }
 
 impl Default for Config {
@@ -42,6 +62,15 @@ impl Default for Config {
             burst_interval: 0,
             active_scheme: 0,
             use_secondary: true,
+            panel_width: 400,
+            bg_color: [0, 0, 0],
+            bg_alpha: 200,
+            font_family: "Microsoft YaHei".into(),
+            font_size: 24,
+            font_bold: true,
+            text_color: [255, 255, 255],
+            outline_color: [0, 0, 0],
+            outline_size: 1,
         }
     }
 }

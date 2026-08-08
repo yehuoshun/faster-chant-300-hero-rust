@@ -1,15 +1,61 @@
 // 悬浮窗模块
-// 透明分层窗口 + GDI 文字渲染
+// 透明分层窗口 + GDI 文字渲染（样式由 PanelStyle 控制）
 
-use windows::core::{w, PCWSTR};
+use windows::core::PCWSTR;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 
+use crate::config::Config;
+
+/// 悬浮面板样式（来自 Config，用于 GDI 渲染）
+#[derive(Debug, Clone)]
+pub struct PanelStyle {
+    pub width: i32,
+    pub bg_color: [u8; 3],
+    pub bg_alpha: u8,
+    pub font_family: String,
+    pub font_size: i32,
+    pub font_bold: bool,
+    pub text_color: [u8; 3],
+    pub outline_color: [u8; 3],
+    pub outline_size: u8,
+}
+
+impl PanelStyle {
+    pub fn from_config(c: &Config) -> Self {
+        Self {
+            width: c.panel_width as i32,
+            bg_color: c.bg_color,
+            bg_alpha: c.bg_alpha,
+            font_family: c.font_family.clone(),
+            font_size: c.font_size as i32,
+            font_bold: c.font_bold,
+            text_color: c.text_color,
+            outline_color: c.outline_color,
+            outline_size: c.outline_size,
+        }
+    }
+
+    /// 根据字号计算面板高度（容纳标题 + 10 行）
+    fn height(&self) -> i32 {
+        40 + 10 * (self.font_size + 6) + 16
+    }
+
+    fn row_h(&self) -> i32 {
+        self.font_size + 6
+    }
+}
+
+fn colorref(rgb: [u8; 3]) -> COLORREF {
+    COLORREF(((rgb[2] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[0] as u32)
+}
+
 /// 悬浮窗
 pub struct Overlay {
     hwnd: HWND,
+    style: PanelStyle,
     width: i32,
     height: i32,
 }
@@ -21,7 +67,7 @@ unsafe impl Sync for Overlay {}
 
 impl Overlay {
     /// 创建悬浮窗
-    pub fn new() -> Option<Self> {
+    pub fn new(style: &PanelStyle) -> Option<Self> {
         let hinstance = unsafe { GetModuleHandleW(None).ok()? };
 
         // 注册窗口类
@@ -40,6 +86,9 @@ impl Overlay {
 
         unsafe { let _ = RegisterClassW(&wc); }
 
+        let width = style.width;
+        let height = style.height();
+
         // 创建分层窗口
         let hwnd = unsafe {
             CreateWindowExW(
@@ -47,7 +96,7 @@ impl Overlay {
                 w!("FcdOverlayClass"),
                 w!("FCD Overlay"),
                 WS_POPUP,
-                0, 0, 400, 300,
+                0, 0, width, height,
                 None,
                 None,
                 hinstance,
@@ -55,12 +104,27 @@ impl Overlay {
             ).ok()?
         };
 
-        // 设置窗口透明度
-        unsafe {
-            let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 0, LWA_COLORKEY);
-        }
+        Some(Self { hwnd, style: style.clone(), width, height })
+    }
 
-        Some(Self { hwnd, width: 400, height: 300 })
+    /// 更新样式（含尺寸变化时调整窗口大小）
+    pub fn set_style(&mut self, style: &PanelStyle) {
+        self.style = style.clone();
+        let new_w = style.width;
+        let new_h = style.height();
+        if new_w != self.width || new_h != self.height {
+            self.width = new_w;
+            self.height = new_h;
+            unsafe {
+                let _ = SetWindowPos(
+                    self.hwnd,
+                    HWND_TOPMOST,
+                    0, 0,
+                    self.width, self.height,
+                    SWP_NOMOVE | SWP_NOACTIVATE,
+                );
+            }
+        }
     }
 
     /// 显示窗口
@@ -110,35 +174,36 @@ impl Overlay {
             let _old_bmp = SelectObject(hdc_mem, hbitmap);
 
             // 背景
-            let brush = CreateSolidBrush(COLORREF(0x80000000));
+            let brush = CreateSolidBrush(colorref(self.style.bg_color));
             let _ = FillRect(hdc_mem, &RECT { left: 0, top: 0, right: self.width, bottom: self.height }, brush);
             let _ = DeleteObject(brush);
 
             // 字体
+            let weight = if self.style.font_bold { FW_BOLD.0 } else { FW_NORMAL.0 };
+            let font_face: Vec<u16> = self.style.font_family.encode_utf16().chain(Some(0)).collect();
             let font = CreateFontW(
-                24, 0, 0, 0, // cheight, cwidth, cescapement, corientation
+                self.style.font_size, 0, 0, 0, // cheight, cwidth, cescapement, corientation
                 0, 0, 0, // bitalic, bunderline, cstrikeout
-                FW_BOLD.0, // cweight
+                weight, // cweight
                 DEFAULT_CHARSET.0 as u32,
                 OUT_DEFAULT_PRECIS.0 as u32,
                 CLIP_DEFAULT_PRECIS.0 as u32,
                 DEFAULT_QUALITY.0 as u32,
                 DEFAULT_PITCH.0 as u32,
-                w!("Microsoft YaHei"),
+                PCWSTR(font_face.as_ptr()),
             );
             let _old_font = SelectObject(hdc_mem, font);
 
             let _ = SetBkMode(hdc_mem, BACKGROUND_MODE(1));
-            let _ = SetTextColor(hdc_mem, COLORREF(0xFFFFFFFF));
 
+            let row = self.style.row_h();
             match content {
                 OverlayContent::Home { items, active, name } => {
                     let title = format!("方案{}: {}", active, name);
                     self.draw_text(hdc_mem, &title, 10, 10);
                     for (i, item) in items.iter().enumerate().take(9) {
                         let text = format!("{}. {}", i + 1, item);
-                        let y = 40 + i as i32 * 28;
-                        self.draw_text(hdc_mem, &text, 10, y);
+                        self.draw_text(hdc_mem, &text, 10, 40 + i as i32 * row);
                     }
                 }
                 OverlayContent::Secondary { index, items } => {
@@ -146,8 +211,7 @@ impl Overlay {
                     self.draw_text(hdc_mem, &title, 10, 10);
                     for (i, item) in items.iter().enumerate().take(10) {
                         let text = format!("{}. {}", i, item);
-                        let y = 40 + i as i32 * 25;
-                        self.draw_text(hdc_mem, &text, 10, y);
+                        self.draw_text(hdc_mem, &text, 10, 40 + i as i32 * row);
                     }
                 }
                 OverlayContent::Search { query, results } => {
@@ -155,8 +219,7 @@ impl Overlay {
                     self.draw_text(hdc_mem, &title, 10, 10);
                     for (i, (id, name)) in results.iter().enumerate().take(9) {
                         let text = format!("{}. {} [{}]", i + 1, name, id);
-                        let y = 40 + i as i32 * 25;
-                        self.draw_text(hdc_mem, &text, 10, y);
+                        self.draw_text(hdc_mem, &text, 10, 40 + i as i32 * row);
                     }
                 }
             }
@@ -167,7 +230,7 @@ impl Overlay {
             let blend = BLENDFUNCTION {
                 BlendOp: AC_SRC_OVER as u8,
                 BlendFlags: 0,
-                SourceConstantAlpha: 200,
+                SourceConstantAlpha: self.style.bg_alpha,
                 AlphaFormat: AC_SRC_ALPHA as u8,
             };
 
@@ -195,14 +258,18 @@ impl Overlay {
 
     fn draw_text(&self, hdc: HDC, text: &str, x: i32, y: i32) {
         let wide: Vec<u16> = text.encode_utf16().collect();
+        let n = self.style.outline_size.max(1) as i32;
         unsafe {
-            // 描边
-            let _ = SetTextColor(hdc, COLORREF(0xFF000000));
-            for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)] {
-                let _ = TextOutW(hdc, x + dx, y + dy, &wide);
+            // 描边（包围格子）
+            let _ = SetTextColor(hdc, colorref(self.style.outline_color));
+            for dx in -n..=n {
+                for dy in -n..=n {
+                    if dx == 0 && dy == 0 { continue; }
+                    let _ = TextOutW(hdc, x + dx, y + dy, &wide);
+                }
             }
             // 填充
-            let _ = SetTextColor(hdc, COLORREF(0xFFFFFFFF));
+            let _ = SetTextColor(hdc, colorref(self.style.text_color));
             let _ = TextOutW(hdc, x, y, &wide);
         }
     }
@@ -228,5 +295,16 @@ mod tests {
         use super::OverlayContent;
         let c = OverlayContent::Home { items: vec!["test".into()], active: 0, name: "方案".into() };
         assert!(matches!(c, OverlayContent::Home { .. }));
+    }
+
+    #[test]
+    fn test_panel_style_height() {
+        use super::PanelStyle;
+        let s = PanelStyle {
+            width: 400, bg_color: [0,0,0], bg_alpha: 200,
+            font_family: "微软雅黑".into(), font_size: 24, font_bold: true,
+            text_color: [255,255,255], outline_color: [0,0,0], outline_size: 1,
+        };
+        assert!(s.height() > 300);
     }
 }

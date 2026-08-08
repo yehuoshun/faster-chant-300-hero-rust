@@ -7,7 +7,7 @@ use once_cell::sync::Lazy;
 use crate::burst::BurstController;
 use crate::config::Config;
 use crate::logger;
-use crate::overlay::{Overlay, OverlayContent};
+use crate::overlay::{Overlay, OverlayContent, PanelStyle};
 use crate::scheme::SchemeManager;
 use crate::state::{ActionResult, Page, StateMachine};
 
@@ -50,7 +50,7 @@ pub fn init() -> Option<GlobalState> {
         config.burst_interval,
         config.auto_back,
     );
-    let overlay = Overlay::new()?;
+    let overlay = Overlay::new(&PanelStyle::from_config(&config))?;
 
     Some(GlobalState {
         sm, config, scheme_mgr, overlay,
@@ -60,8 +60,9 @@ pub fn init() -> Option<GlobalState> {
     })
 }
 
-/// 根据当前页面状态刷新悬浮面板
-pub fn refresh_overlay(gs: &GlobalState) {
+/// 根据当前页面状态刷新悬浮面板（先同步样式再渲染）
+pub fn refresh_overlay(gs: &mut GlobalState) {
+    gs.overlay.set_style(&PanelStyle::from_config(&gs.config));
     let scheme = gs.scheme_mgr.get(gs.sm.scheme_id());
     let content = match gs.sm.page() {
         Page::Home => {
@@ -119,6 +120,9 @@ pub fn execute_action(gs: &mut GlobalState, action: ActionResult) {
                 gs.config.burst_interval,
                 gs.config.auto_back,
             );
+            gs.config.active_scheme = id;
+            let dir = data_dir();
+            gs.config.save(&dir);
             refresh_overlay(gs);
         }
         ActionResult::SendMessage(msg) => {
@@ -169,6 +173,48 @@ pub fn execute_action(gs: &mut GlobalState, action: ActionResult) {
         }
         ActionResult::UpdateSearch(query, results) => {
             gs.overlay.update(&OverlayContent::Search { query, results });
+        }
+    }
+}
+
+// ── UI/托盘辅助 ──
+
+/// egui 窗口上下文（供托盘菜单操作主窗口）
+pub static UI_CTX: Lazy<Mutex<Option<egui::Context>>> = Lazy::new(|| Mutex::new(None));
+
+/// 保存配置并同步运行态（UI 修改后调用）
+pub fn save_config_and_sync() {
+    let mut state = STATE.lock().unwrap();
+    if let Some(gs) = state.as_mut() {
+        let dir = data_dir();
+        gs.config.save(&dir);
+        gs.sm.update_config(
+            gs.scheme_mgr.active(),
+            gs.config.use_secondary,
+            gs.config.burst_interval,
+            gs.config.auto_back,
+        );
+        gs.overlay.set_style(&PanelStyle::from_config(&gs.config));
+    }
+}
+
+/// 托盘菜单：显示/隐藏悬浮面板（需游戏窗口在前台）
+pub fn toggle_panel_from_tray() {
+    let mut state = STATE.lock().unwrap();
+    if let Some(gs) = state.as_mut() {
+        if gs.panel_visible {
+            gs.overlay.hide();
+            gs.panel_visible = false;
+            return;
+        }
+        let game = crate::window::find_game_window(gs.config.only_300);
+        if let Some(hwnd) = game {
+            crate::window::position_overlay(&gs.overlay, hwnd, gs.config.panel_left);
+            gs.overlay.show();
+            gs.panel_visible = true;
+            refresh_overlay(gs);
+        } else {
+            logger::info("托盘呼面板：未检测到游戏窗口");
         }
     }
 }
