@@ -1,14 +1,27 @@
 // 输入模拟模块
 // SendInput 模拟按键 + arboard 剪贴板
 
+use std::sync::Mutex;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
     KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_LCONTROL, VK_RETURN, VK_RSHIFT, VK_V,
 };
 
+/// 发送锁：串行化所有发送流程，避免手动发送与连发线程争抢剪贴板
+static SEND_LOCK: once_cell::sync::Lazy<Mutex<()>> =
+    once_cell::sync::Lazy::new(|| Mutex::new(()));
+
+/// 截断日志文本，按字符边界安全截断（避免 UTF-8 切片 panic）
+fn truncate_for_log(text: &str) -> String {
+    text.chars().take(20).collect::<String>()
+}
+
 /// 发送消息
 pub fn send_message(text: &str, public_chat: bool, chat_mode: bool) {
-    crate::logger::info(&format!("发送: {}...", &text[..text.len().min(20)]));
+    crate::logger::info(&format!("发送: {}...", truncate_for_log(text)));
+
+    // 持有锁直到整个发送序列完成，防止并发截胡剪贴板
+    let _guard = SEND_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
     if let Err(e) = arboard::Clipboard::new().and_then(|mut c| c.set_text(text)) {
         crate::logger::error(&format!("剪贴板失败: {}", e));

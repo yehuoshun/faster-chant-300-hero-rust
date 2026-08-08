@@ -84,6 +84,11 @@ impl Overlay {
         }
     }
 
+    /// 面板宽度（供定位到游戏窗口旁使用）
+    pub fn width(&self) -> i32 {
+        self.width
+    }
+
     /// 更新内容
     pub fn update(&self, content: &OverlayContent) {
         self.render(content);
@@ -122,10 +127,12 @@ impl Overlay {
             let _ = SetTextColor(hdc_mem, COLORREF(0xFFFFFFFF));
 
             match content {
-                OverlayContent::Home { items, active: _ } => {
+                OverlayContent::Home { items, active, name } => {
+                    let title = format!("方案{}: {}", active, name);
+                    self.draw_text(hdc_mem, &title, 10, 10);
                     for (i, item) in items.iter().enumerate().take(9) {
                         let text = format!("{}. {}", i + 1, item);
-                        let y = 10 + i as i32 * 30;
+                        let y = 40 + i as i32 * 28;
                         self.draw_text(hdc_mem, &text, 10, y);
                     }
                 }
@@ -204,7 +211,7 @@ impl Overlay {
 }
 
 pub enum OverlayContent {
-    Home { items: Vec<String>, active: u8 },
+    Home { items: Vec<String>, active: u8, name: String },
     Secondary { index: u8, items: [String; 10] },
     Search { query: String, results: Vec<(u8, String)> },
 }
@@ -214,7 +221,7 @@ mod tests {
     #[test]
     fn test_content_creation() {
         use super::OverlayContent;
-        let c = OverlayContent::Home { items: vec!["test".into()], active: 0 };
+        let c = OverlayContent::Home { items: vec!["test".into()], active: 0, name: "方案".into() };
         assert!(matches!(c, OverlayContent::Home { .. }));
     }
 }

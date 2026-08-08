@@ -232,8 +232,11 @@ impl StateMachine {
                                 return ActionResult::UpdateSearch(new_spell, display);
                             }
                         }
-                        // 字母 → 继续拼写
+                        // 字母 → 继续拼写（限长 16，防止无限增长）
                         if let Some(c) = alpha {
+                            if input.chars().count() >= 16 {
+                                return ActionResult::None;
+                            }
                             let new_spell = format!("{}{}", input, c);
                             let results = schemes.find_by_spell(&new_spell);
                             let display: Vec<_> = results
@@ -243,14 +246,16 @@ impl StateMachine {
                             self.search_mode = Some(SearchMode::BySpell(new_spell.clone()));
                             return ActionResult::UpdateSearch(new_spell, display);
                         }
-                        // 数字 → 选中搜索结果
+                        // 数字 → 选中搜索结果（显示为 1-based，索引需 -1）
                         if let Some(n) = num {
-                            let results = schemes.find_by_spell(input);
-                            if let Some((id, _)) = results.get(n as usize) {
-                                self.scheme_id = *id;
-                                self.page = Page::Home;
-                                self.search_mode = None;
-                                return ActionResult::SwitchScheme(*id);
+                            if n >= 1 && n <= 9 {
+                                let results = schemes.find_by_spell(input);
+                                if let Some((id, _)) = results.get((n - 1) as usize) {
+                                    self.scheme_id = *id;
+                                    self.page = Page::Home;
+                                    self.search_mode = None;
+                                    return ActionResult::SwitchScheme(*id);
+                                }
                             }
                         }
                     }

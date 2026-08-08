@@ -67,7 +67,6 @@ impl BurstController {
 
         self.running.store(true, Ordering::SeqCst);
         let running = self.running.clone();
-        let interval = Duration::from_secs(interval_secs as u64);
 
         thread::spawn(move || {
             for (i, item) in secondary_items.iter().enumerate() {

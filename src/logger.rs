@@ -139,4 +139,7 @@ pub fn debug(msg: &str) { log("DEBUG", msg); }
 pub fn info(msg: &str)  { log("INFO ", msg); }
 pub fn warn(msg: &str)  { log("WARN ", msg); }
 pub fn error(msg: &str) { log("ERROR", msg); }
-pub fn fatal(msg: &str) { log("FATAL", msg); }
+pub fn fatal(msg: &str) {
+    log("FATAL", msg);
+    std::process::exit(1);
+}

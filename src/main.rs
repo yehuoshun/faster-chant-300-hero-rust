@@ -16,15 +16,19 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
 
-use windows::Win32::Foundation::{LPARAM, WPARAM, LRESULT, HWND};
+use windows::core::PWSTR;
+use windows::Win32::Foundation::{LPARAM, WPARAM, LRESULT, HWND, CloseHandle};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Threading::{
+    OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     VK_ESCAPE, VK_SPACE, KBDLLHOOKSTRUCT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, SetWindowsHookExW, UnhookWindowsHookEx,
     WH_KEYBOARD_LL, WM_KEYDOWN, WM_SYSKEYDOWN, WM_KEYUP, WM_SYSKEYUP,
-    GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
+    GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
 };
 
 use state::{StateMachine, Page, ActionResult};
@@ -60,7 +64,11 @@ fn init() -> Option<GlobalState> {
     let _ = std::fs::create_dir_all(&dir);
 
     let config = Config::load(&dir).unwrap_or_default();
-    let scheme_mgr = SchemeManager::init(dir.clone());
+    let mut scheme_mgr = SchemeManager::init(dir.clone());
+    // config.active_scheme 优先作为激活方案（若对应方案存在）
+    if scheme_mgr.contains(config.active_scheme) {
+        scheme_mgr.set_active(config.active_scheme);
+    }
     let sm = StateMachine::new(
         scheme_mgr.active(),
         config.use_secondary,
@@ -78,19 +86,35 @@ fn init() -> Option<GlobalState> {
 }
 
 // ── 窗口检测 ──
-
-fn find_game_window() -> Option<HWND> {
-    // 简化为检测前台窗口标题是否包含 "300"
+// only_300=true: 严格校验前台窗口所属进程的 exe 名包含 "300"
+// only_300=false: 退化为标题包含 "300" 的宽松检测
+fn find_game_window(only_300: bool) -> Option<HWND> {
     unsafe {
         let hwnd = GetForegroundWindow();
-        let mut buf = [0u16; 256];
-        let len = GetWindowTextW(hwnd, &mut buf);
-        if len == 0 { return None; }
-        let title = String::from_utf16_lossy(&buf[..len as usize]);
-        if title.contains("300") {
-            Some(hwnd)
+        if hwnd.is_invalid() { return None; }
+        if !IsWindowVisible(hwnd).as_bool() { return None; }
+
+        if only_300 {
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            if pid == 0 { return None; }
+
+            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+            let mut buf = [0u16; 512];
+            let mut size = buf.len() as u32;
+            let ok = QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut size);
+            let _ = CloseHandle(process);
+            if ok.is_err() { return None; }
+
+            let path = String::from_utf16_lossy(&buf[..size as usize]);
+            let exe = path.rsplit('\\').next().unwrap_or(&path).to_lowercase();
+            if exe.contains("300") { Some(hwnd) } else { None }
         } else {
-            None
+            let mut buf = [0u16; 256];
+            let len = GetWindowTextW(hwnd, &mut buf);
+            if len == 0 { return None; }
+            let title = String::from_utf16_lossy(&buf[..len as usize]);
+            if title.contains("300") { Some(hwnd) } else { None }
         }
     }
 }
@@ -122,10 +146,11 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) 
         gs.sm.set_space(is_down);
     }
 
-    // Esc 退出
+    // Esc 退出（关闭面板 + 停止连发）
     if vk == VK_ESCAPE.0 as u32 && is_down {
         gs.overlay.hide();
         gs.panel_visible = false;
+        gs.burst.stop();
         gs.sm.reset();
         logger::info("Esc 关闭面板");
         return unsafe { CallNextHookEx(None, n_code, w_param, l_param) };
@@ -133,13 +158,15 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) 
 
     let trigger = gs.config.trigger_key;
 
-    // 检测游戏窗口
-    let game_focused = find_game_window().is_some();
+    // 检测游戏窗口（复用结果，避免每键多次探测）
+    let game_hwnd = find_game_window(gs.config.only_300);
+    let game_focused = game_hwnd.is_some();
 
     if !game_focused && gs.panel_visible {
         gs.overlay.hide();
         gs.panel_visible = false;
         gs.sm.reset();
+        gs.burst.stop();
     }
 
     if !game_focused {
@@ -157,8 +184,13 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) 
         if gs.panel_visible {
             gs.overlay.hide();
             gs.panel_visible = false;
+            gs.burst.stop();
             gs.sm.reset();
         } else {
+            // 面板贴到游戏窗口旁（按配置左右侧）
+            if let Some(hwnd) = game_hwnd {
+                position_overlay(&gs.overlay, hwnd, gs.config.panel_left);
+            }
             gs.overlay.show();
             gs.panel_visible = true;
             refresh_overlay(gs);
@@ -177,6 +209,12 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) 
     let action = gs.sm.handle_key(vk, &gs.scheme_mgr);
     execute_action(gs, action);
 
+    // 屏蔽热键：面板激活时，除触发键/Esc 外的按键不穿透到游戏
+    if gs.config.shield_hotkey {
+        drop(state);
+        return LRESULT(1);
+    }
+
     drop(state);
     unsafe { CallNextHookEx(None, n_code, w_param, l_param) }
 }
@@ -190,7 +228,11 @@ fn refresh_overlay(gs: &GlobalState) {
             } else {
                 vec!["".into(); 9]
             };
-            OverlayContent::Home { items, active: gs.sm.scheme_id() }
+            OverlayContent::Home {
+                items,
+                active: gs.sm.scheme_id(),
+                name: scheme.map(|s| s.name.clone()).unwrap_or_default(),
+            }
         }
         Page::Secondary(_) => {
             let items = if let Some(s) = scheme {
@@ -240,12 +282,35 @@ fn execute_action(gs: &mut GlobalState, action: ActionResult) {
             input::send_message(&msg, gs.config.public_chat, gs.config.chat_mode);
             refresh_overlay(gs);
         }
-        ActionResult::StartBurst(_, _) => {
-            // TODO: 连发需要从 scheme 获取二级面板内容
-            logger::info("连发启动");
+        ActionResult::StartBurst(scheme_id, secondary_index) => {
+            // 从方案取二级面板内容并启动连发线程
+            let items = match gs.scheme_mgr.get(scheme_id) {
+                Some(scheme) => {
+                    let idx = secondary_index.saturating_sub(1) as usize;
+                    if idx < scheme.secondary.len() {
+                        scheme.secondary[idx].to_vec()
+                    } else {
+                        Vec::new()
+                    }
+                }
+                None => Vec::new(),
+            };
+            gs.burst.start(
+                scheme_id,
+                secondary_index,
+                gs.config.burst_interval,
+                gs.config.public_chat,
+                gs.config.chat_mode,
+                items,
+            );
         }
         ActionResult::SetBurstInterval(interval) => {
             gs.config.burst_interval = interval;
+            if interval == 0 {
+                gs.burst.stop(); // 间隔 0 = 关闭连发
+            }
+            let dir = data_dir();
+            gs.config.save(&dir); // 落盘，重启不丢
             gs.sm.update_config(
                 gs.sm.scheme_id(),
                 gs.config.use_secondary,
@@ -266,15 +331,18 @@ fn execute_action(gs: &mut GlobalState, action: ActionResult) {
 }
 
 // ── 窗口位置 ──
-
-fn _position_overlay(overlay: &Overlay, game_hwnd: HWND) {
+// 面板贴到游戏窗口内测（左/右由配置决定）
+fn position_overlay(overlay: &Overlay, game_hwnd: HWND, panel_left: bool) {
     use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
     unsafe {
         let mut rect = std::mem::zeroed();
         if GetWindowRect(game_hwnd, &mut rect).is_ok() {
-            let x = rect.left + 10;
-            let y = rect.top + 50;
-            overlay.set_position(x, y);
+            let x = if panel_left {
+                rect.left + 10
+            } else {
+                rect.right - overlay.width() - 10
+            };
+            overlay.set_position(x, rect.top + 50);
         }
     }
 }
@@ -323,7 +391,7 @@ fn main() -> io::Result<()> {
             logger::info("程序正常退出");
         }
         Err(e) => {
-            logger::error(&format!("安装钩子失败: {:?}"));
+            logger::error(&format!("安装钩子失败: {:?}", e));
             logger::error("请以管理员权限运行");
             eprintln!("按回车退出...");
             let mut s = String::new();
