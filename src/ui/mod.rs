@@ -5,6 +5,8 @@ pub mod schemes;
 pub mod settings;
 pub mod styles;
 
+use std::sync::Arc;
+
 use eframe::egui;
 
 use crate::app;
@@ -48,7 +50,7 @@ fn setup_cjk_fonts(ctx: &egui::Context) {
     for path in candidates {
         if let Ok(data) = std::fs::read(path) {
             fonts.font_data
-                .insert("cjk".to_owned(), egui::FontData::from_owned(data));
+                .insert("cjk".to_owned(), Arc::new(egui::FontData::from_owned(data)));
             for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
                 fonts.families.entry(family).or_default().push("cjk".to_owned());
             }
@@ -59,10 +61,9 @@ fn setup_cjk_fonts(ctx: &egui::Context) {
 }
 
 impl eframe::App for MainApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // 供托盘菜单操作主窗口
+    /// 窗口隐藏时仍会被调用：处理托盘事件与关闭拦截
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         *app::UI_CTX.lock().unwrap() = Some(ctx.clone());
-        // 处理托盘事件
         crate::tray::poll();
 
         // 关闭窗口 → 隐藏到托盘（程序继续跑钩子）
@@ -70,9 +71,14 @@ impl eframe::App for MainApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
         }
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        *app::UI_CTX.lock().unwrap() = Some(ctx);
 
         // 顶栏
-        egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
+        egui::Panel::top("top_bar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("⛩ 300 高速咏唱装置");
                 ui.separator();
@@ -91,10 +97,9 @@ impl eframe::App for MainApp {
         });
 
         // 左侧导航
-        egui::SidePanel::left("nav")
-            .resizable(false)
-            .default_width(140.0)
-            .show(ctx, |ui| {
+        egui::Panel::left("nav")
+            .exact_size(140.0)
+            .show(ui, |ui| {
                 ui.add_space(8.0);
                 ui.selectable_value(&mut self.tab, Tab::Settings, "⚙ 基本设置");
                 ui.selectable_value(&mut self.tab, Tab::Styles, "🎨 面板样式");
@@ -103,7 +108,7 @@ impl eframe::App for MainApp {
             });
 
         // 内容区
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             match self.tab {
                 Tab::Settings => settings::show(ui),
                 Tab::Styles => styles::show(ui),

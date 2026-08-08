@@ -4,6 +4,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
 
+/// egui 由 eframe re-export
+use eframe::egui;
+
 use crate::burst::BurstController;
 use crate::config::Config;
 use crate::logger;

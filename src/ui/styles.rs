@@ -37,6 +37,7 @@ pub fn show(ui: &mut egui::Ui) {
                             ui.selectable_value(&mut sel, i, *f);
                         }
                     })
+                    .response
                     .changed()
                 {
                     gs.config.font_family = FONTS[sel].to_string();
@@ -86,7 +87,7 @@ fn preview(ui: &mut egui::Ui) {
 
     // 面板背景
     let bg = egui::Color32::from_rgba_unmultiplied(cfg.bg_color[0], cfg.bg_color[1], cfg.bg_color[2], cfg.bg_alpha);
-    painter.rect_filled(rect, 6.0, bg);
+    painter.rect_filled(rect, egui::CornerRadius::same(6), bg);
 
     // 描边函数：粗描边文字
     let fg = egui::Color32::from_rgb(cfg.text_color[0], cfg.text_color[1], cfg.text_color[2]);

@@ -1,13 +1,10 @@
 // 系统托盘：常驻图标 + 菜单（显示面板 / 打开设置 / 退出）
 
-use std::sync::Mutex;
-use once_cell::sync::Lazy;
+use eframe::egui;
 use tray_icon::menu::{Menu, MenuEvent, MenuItem};
-use tray_icon::{Icon, TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tray_icon::{Icon, TrayIconBuilder, TrayIconEvent};
 
 use crate::logger;
-
-static TRAY: Lazy<Mutex<Option<TrayIcon>>> = Lazy::new(|| Mutex::new(None));
 
 /// 生成 32x32 托盘图标（深蓝底 + 青色圆环 + 白点）
 fn make_icon() -> Icon {
@@ -58,7 +55,8 @@ pub fn init() {
 
     match tray {
         Ok(t) => {
-            *TRAY.lock().unwrap() = Some(t);
+            // TrayIcon 非 Send，无法放 static；泄漏以保持存活（进程生命周期）
+            Box::leak(Box::new(t));
             logger::info("系统托盘已就绪");
         }
         Err(e) => logger::error(&format!("托盘初始化失败: {}", e)),

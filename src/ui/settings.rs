@@ -33,6 +33,7 @@ pub fn show(ui: &mut egui::Ui) {
                             ui.selectable_value(&mut sel, i, *name);
                         }
                     })
+                    .response
                     .changed()
                 {
                     gs.config.trigger_key = TRIGGERS[sel].1;

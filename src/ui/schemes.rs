@@ -17,7 +17,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut MainApp) {
         .default_width(240.0)
         .show_inside(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.text_edit_singleline(&mut main.scheme_filter).desired_width(150.0);
+                ui.add(egui::TextEdit::singleline(&mut main.scheme_filter).desired_width(150.0));
                 if ui.button("＋").on_hover_text("新建方案").clicked() {
                     if let Some(b) = gs.scheme_mgr.blank_id() {
                         let _ = gs.scheme_mgr.append(b);
@@ -103,7 +103,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut MainApp) {
             egui::Grid::new("primary_grid").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
                 for i in 0..9 {
                     ui.label(format!("{}", i + 1));
-                    dirty |= ui.text_edit_singleline(&mut scheme.primary[i]).desired_width(320.0).changed();
+                    dirty |= ui.add(egui::TextEdit::singleline(&mut scheme.primary[i]).desired_width(320.0)).changed();
                     ui.end_row();
                 }
             });
@@ -118,7 +118,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut MainApp) {
                             egui::Grid::new(("sec_grid", g)).num_columns(2).spacing([12.0, 4.0]).show(ui, |ui| {
                                 for j in 0..10 {
                                     ui.label(format!("{}", j));
-                                    dirty |= ui.text_edit_singleline(&mut scheme.secondary[g][j]).desired_width(300.0).changed();
+                                    dirty |= ui.add(egui::TextEdit::singleline(&mut scheme.secondary[g][j]).desired_width(300.0)).changed();
                                     ui.end_row();
                                 }
                             });
