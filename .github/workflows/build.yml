@@ -42,5 +42,6 @@ jobs:
       - name: 创建 Release
         uses: softprops/action-gh-release@v2
         with:
+          name: ${{ github.ref_name }}
           files: faster-chant-300-hero-rust.exe
           generate_release_notes: true
