@@ -1,7 +1,7 @@
 // 悬浮窗模块
 // 透明分层窗口 + GDI 文字渲染（样式由 PanelStyle 控制）
 
-use windows::core::PCWSTR;
+use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
