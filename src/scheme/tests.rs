@@ -1,5 +1,3 @@
-#[cfg(test)]
-mod tests {
     use super::*;
 
     fn test_dir() -> PathBuf {
@@ -113,4 +111,3 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&dir);
     }
-}

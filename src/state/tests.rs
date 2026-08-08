@@ -1,7 +1,4 @@
-#[cfg(test)]
-mod tests {
     use super::*;
-    use crate::scheme::SchemeManager;
     use std::path::PathBuf;
 
     fn setup() -> (StateMachine, SchemeManager) {
@@ -108,4 +105,3 @@ mod tests {
             other => panic!("应该触发连发，实际: {:?}", other),
         }
     }
-}
