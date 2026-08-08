@@ -1,6 +1,6 @@
 // 日志系统
 // 目标：只看日志就能定位 90% 的问题
-// 日志文件位于 exe 同目录下的 log/ 文件夹，文件名 faster-chant.log
+// 日志文件位于 exe 同目录下的 log/ 文件夹，文件名带启动时间戳（避免多次启动重叠）
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
@@ -14,6 +14,8 @@ static LOGGER: once_cell::sync::Lazy<Mutex<Logger>> =
 struct Logger {
     file: Option<File>,
     max_size: u64,
+    /// 当前日志文件路径（含启动时间戳）
+    path: PathBuf,
 }
 
 impl Logger {
@@ -22,6 +24,8 @@ impl Logger {
         // 确保 log/ 目录存在，否则打开文件会失败
         if let Some(dir) = log_path.parent() {
             let _ = std::fs::create_dir_all(dir);
+            // 保留最近 10 个日志，清理更旧的（防止无限堆积）
+            cleanup_old(dir, 10);
         }
         let file = OpenOptions::new()
             .create(true)
@@ -36,20 +40,20 @@ impl Logger {
         Self {
             file,
             max_size: 2 * 1024 * 1024, // 2MB 自动轮转
+            path: log_path,
         }
     }
 
     fn rotate(&mut self) {
-        let log_path = log_path();
-        let bak_path = log_path.with_extension("log.bak");
+        let bak_path = self.path.with_extension("log.bak");
 
-        if let Ok(meta) = std::fs::metadata(&log_path) {
+        if let Ok(meta) = std::fs::metadata(&self.path) {
             if meta.len() > self.max_size {
-                let _ = std::fs::rename(&log_path, &bak_path);
+                let _ = std::fs::rename(&self.path, &bak_path);
                 self.file = OpenOptions::new()
                     .create(true)
                     .append(true)
-                    .open(&log_path)
+                    .open(&self.path)
                     .ok();
                 if let Some(ref mut f) = self.file {
                     let _ = writeln!(f, "[日志] 日志文件已轮转，旧日志保存为 .log.bak");
@@ -125,13 +129,47 @@ fn is_leap(y: u64) -> bool {
 }
 
 fn log_path() -> PathBuf {
-    // exe 同目录下的 log/ 文件夹
+    // exe 同目录下的 log/ 文件夹，文件名带启动时间戳
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
     let dir = exe
         .parent()
         .unwrap_or(Path::new("."))
         .join("log");
-    dir.join("faster-chant.log")
+    dir.join(format!("faster-chant-{}.log", file_timestamp()))
+}
+
+/// 生成文件时间戳（东八区，如 20260808-194100）
+fn file_timestamp() -> String {
+    let dur = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let total = dur.as_secs() + 8 * 3600;
+    let days = total / 86400;
+    let h = (total % 86400) / 3600;
+    let m = (total % 3600) / 60;
+    let s = total % 60;
+    let (y, mo, d) = civil_date(days);
+    format!("{:04}{:02}{:02}-{:02}{:02}{:02}", y, mo, d, h, m, s)
+}
+
+/// 清理 log/ 下旧的 faster-chant-*.log，只保留最近 keep 个
+fn cleanup_old(dir: &Path, keep: usize) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let mut logs: Vec<PathBuf> = entries
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| {
+            p.extension().map_or(false, |e| e == "log")
+                && p
+                    .file_name()
+                    .map_or(false, |n| n.to_string_lossy().starts_with("faster-chant-"))
+        })
+        .collect();
+    logs.sort(); // 文件名时间戳字典序 = 时间序
+    while logs.len() > keep {
+        let old = logs.remove(0);
+        let _ = std::fs::remove_file(&old);
+    }
 }
 
 // === 公开 API ===
