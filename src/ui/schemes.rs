@@ -12,9 +12,8 @@ pub fn show(ui: &mut egui::Ui, main: &mut MainApp) {
     let active = gs.scheme_mgr.active();
 
     // ── 左侧：方案列表 ──
-    egui::SidePanel::left("scheme_list")
-        .resizable(false)
-        .default_width(240.0)
+    egui::Panel::left("scheme_list")
+        .exact_size(240.0)
         .show_inside(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut main.scheme_filter).desired_width(150.0));
