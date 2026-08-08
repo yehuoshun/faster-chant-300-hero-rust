@@ -1,6 +1,6 @@
 [package]
 name = "faster-chant-300-hero-rust"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 description = "300高速咏唱装置 Rust 重构版"
 
