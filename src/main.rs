@@ -20,6 +20,9 @@ mod window;
 use eframe::egui;
 
 fn main() -> eframe::Result {
+    // 崩溃时把 panic + 堆栈写入日志（最先安装）
+    logger::install_panic_hook();
+
     logger::info(&format!("程序启动 v{}", env!("CARGO_PKG_VERSION")));
     logger::info(&format!("数据目录: {:?}", app::data_dir()));
 

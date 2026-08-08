@@ -58,6 +58,7 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) 
     let game_focused = game_hwnd.is_some();
 
     if !game_focused && gs.panel_visible {
+        logger::info("游戏窗口失去焦点，面板隐藏");
         gs.overlay.hide();
         gs.panel_visible = false;
         gs.sm.reset();
@@ -77,6 +78,7 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) 
     // 触发键：切换面板
     if vk == trigger as u32 {
         if gs.panel_visible {
+            logger::info("触发键关闭面板");
             gs.overlay.hide();
             gs.panel_visible = false;
             gs.burst.stop();
@@ -86,6 +88,7 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) 
             if let Some(hwnd) = game_hwnd {
                 position_overlay(&gs.overlay, hwnd, gs.config.panel_left);
             }
+            logger::info(&format!("呼出面板，当前方案: {}", gs.sm.scheme_id()));
             gs.overlay.show();
             gs.panel_visible = true;
             refresh_overlay(gs);
@@ -106,6 +109,7 @@ extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) 
 
     // 屏蔽热键：面板激活时，除触发键/Esc 外的按键不穿透到游戏
     if gs.config.shield_hotkey {
+        logger::debug(&format!("热键屏蔽: vk={}", vk));
         drop(state);
         return LRESULT(1);
     }

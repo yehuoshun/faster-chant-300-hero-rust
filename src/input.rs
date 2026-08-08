@@ -18,7 +18,7 @@ fn truncate_for_log(text: &str) -> String {
 
 /// 发送消息
 pub fn send_message(text: &str, public_chat: bool, chat_mode: bool) {
-    crate::logger::info(&format!("发送: {}...", truncate_for_log(text)));
+    crate::logger::info(&format!("发送: {}... (public={}, chat_mode={})", truncate_for_log(text), public_chat, chat_mode));
 
     // 持有锁直到整个发送序列完成，防止并发截胡剪贴板
     let _guard = SEND_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -70,7 +70,10 @@ fn key_down(vk: VIRTUAL_KEY) {
             },
         },
     };
-    unsafe { SendInput(&[input], std::mem::size_of::<INPUT>() as i32) };
+    let sent = unsafe { SendInput(&[input], std::mem::size_of::<INPUT>() as i32) };
+    if sent == 0 {
+        crate::logger::error(&format!("SendInput 按下失败 vk={:?}", vk));
+    }
 }
 
 fn key_up(vk: VIRTUAL_KEY) {
@@ -86,7 +89,10 @@ fn key_up(vk: VIRTUAL_KEY) {
             },
         },
     };
-    unsafe { SendInput(&[input], std::mem::size_of::<INPUT>() as i32) };
+    let sent = unsafe { SendInput(&[input], std::mem::size_of::<INPUT>() as i32) };
+    if sent == 0 {
+        crate::logger::error(&format!("SendInput 松开失败 vk={:?}", vk));
+    }
 }
 
 #[cfg(test)]

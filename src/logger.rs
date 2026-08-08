@@ -151,3 +151,22 @@ pub fn fatal(msg: &str) {
     log("FATAL", msg);
     std::process::exit(1);
 }
+
+/// 安装 panic 钩子：程序崩溃时把 panic 信息 + 堆栈写入日志
+/// （这样用户崩溃时日志能定位到崩溃点，方便反馈 bug）
+pub fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let msg = info
+            .payload()
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| info.payload().downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "未知 panic".to_string());
+        let loc = info
+            .location()
+            .map(|l| format!("{}:{}", l.file(), l.line()))
+            .unwrap_or_default();
+        let bt = std::backtrace::Backtrace::force_capture();
+        log("PANIC", &format!("==============================\nPANIC: {}（位于 {}\n堆栈:\n{}\n==============================", msg, loc, bt));
+    }));
+}

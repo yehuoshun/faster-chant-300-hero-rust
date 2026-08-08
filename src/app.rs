@@ -55,6 +55,18 @@ pub fn init() -> Option<GlobalState> {
     );
     let overlay = Overlay::new(&PanelStyle::from_config(&config))?;
 
+    logger::info(&format!(
+        "配置摘要: 触发键={}, 仅限三百={}, 全体发言={}, 聊天模式={}, 屏蔽热键={}, 自动回首页={}, 连发间隔={}秒, 二级面板={}",
+        config.trigger_key,
+        config.only_300,
+        config.public_chat,
+        config.chat_mode,
+        config.shield_hotkey,
+        config.auto_back,
+        config.burst_interval,
+        config.use_secondary
+    ));
+
     Some(GlobalState {
         sm, config, scheme_mgr, overlay,
         burst: BurstController::new(),
@@ -113,9 +125,15 @@ pub fn execute_action(gs: &mut GlobalState, action: ActionResult) {
     match action {
         ActionResult::None => {}
         ActionResult::SwitchPage(_) => {
+            match gs.sm.page() {
+                Page::Home => logger::info("返回首页"),
+                Page::Secondary(n) => logger::info(&format!("进入二级面板 {}", n)),
+                Page::Search => logger::info("进入搜索页"),
+            }
             refresh_overlay(gs);
         }
         ActionResult::SwitchScheme(id) => {
+            logger::info(&format!("切换到方案 {}", id));
             gs.scheme_mgr.set_active(id);
             gs.sm.update_config(
                 id,
